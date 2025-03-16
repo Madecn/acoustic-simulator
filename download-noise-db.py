@@ -12,7 +12,7 @@ import threading
 import queue
 from pathlib import Path
 
-apiKey = "bPQdQ891V6d8bHCvaQET7VjjnNEnYshXYrEDGD3A"  # 请填入你的 Freesound API 密钥
+apiKey = ""  # 请填入你的 Freesound API 密钥
 
 downloadAudio = True
 delim = ",.?-_:;'\" ()[]{}&^%$#@!~`<>/|"
