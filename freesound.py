@@ -1,83 +1,65 @@
-#The MIT License (MIT)
+# The MIT License (MIT)
+# Copyright (c) 2013-2014 Universitat Pompeu Fabra
 #
-#Copyright (c) 2013-2014 Universitat Pompeu Fabra
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
 #
-#Permission is hereby granted, free of charge, to any person obtaining a copy
-#of this software and associated documentation files (the "Software"), to deal
-#in the Software without restriction, including without limitation the rights
-#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-#copies of the Software, and to permit persons to whom the Software is
-#furnished to do so, subject to the following conditions:
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
 #
-#The above copyright notice and this permission notice shall be included in
-#all copies or substantial portions of the Software.
-#
-#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-#THE SOFTWARE.
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+# THE SOFTWARE.
 
-import os, re, json
-from collections import namedtuple
+import os
+import re
+import json
+from urllib.request import urlopen, Request
+from urllib.parse import urlencode, quote
+from urllib.error import HTTPError
 
-try: #python 3
-    from urllib.request import urlopen, FancyUrlOpener, Request
-    from urllib.parse import urlparse, urlencode, quote
-    from urllib.error import HTTPError
-except ImportError: #python 2.7
-    from urlparse import urlparse
-    from urllib import urlencode, FancyURLopener, quote
-    from urllib2 import HTTPError, urlopen, Request
-    
-class URIS():    
+
+class URIS:
     HOST = 'www.freesound.org'
-    BASE =  'https://'+HOST+'/apiv2'
+    BASE = 'https://' + HOST + '/apiv2'
     TEXT_SEARCH = '/search/text/'
-    CONTENT_SEARCH= '/search/content/'
+    CONTENT_SEARCH = '/search/content/'
     COMBINED_SEARCH = '/sounds/search/combined/'
     SOUND = '/sounds/<sound_id>/'
-    SOUND_ANALYSIS = '/sounds/<sound_id>/analysis/'
-    SIMILAR_SOUNDS = '/sounds/<sound_id>/similar/'
-    COMMENTS = '/sounds/<sound_id>/comments/'
-    DOWNLOAD = '/sounds/<sound_id>/download/'
-    UPLOAD = '/sounds/upload/'
-    DESCRIBE = '/sounds/<sound_id>/describe/'
-    PENDING = '/sounds/pending_uploads/'
-    BOOKMARK = '/sounds/<sound_id>/bookmark/'
-    RATE = '/sounds/<sound_id>/rate/'
-    COMMENT = '/sounds/<sound_id>/comment/'
-    AUTHORIZE = '/oauth2/authorize/'
-    LOGOUT = '/api-auth/logout/'
-    LOGOUT_AUTHORIZE = '/oauth2/logout_and_authorize/'
-    ME = '/me/'
     USER = '/users/<username>/'
     USER_SOUNDS = '/users/<username>/sounds/'
     USER_PACKS = '/users/<username>/packs/'
-    USER_BOOKMARK_CATEGORIES = '/users/<username>/bookmark_categories/'
-    USER_BOOKMARK_CATEGORY_SOUNDS = '/users/<username>/bookmark_categories/<category_id>/sounds/'
     PACK = '/packs/<pack_id>/'
     PACK_SOUNDS = '/packs/<pack_id>/sounds/'
-    PACK_DOWNLOAD = '/packs/<pack_id>/download/'   
+    DOWNLOAD = '/sounds/<sound_id>/download/'
+    ANALYSIS = '/sounds/<sound_id>/analysis/'
+    SIMILAR_SOUNDS = '/sounds/<sound_id>/similar/'
+    COMMENTS = '/sounds/<sound_id>/comments/'
+    SOUND_ANALYSIS = '/sounds/<sound_id>/analysis/<filter>/'
 
-    
     @classmethod
     def uri(cls, uri, *args):
         for a in args:
-            uri = re.sub('<[\w_]+>', quote(str(a)), uri, 1)
-        return cls.BASE+uri    
+            uri = re.sub(r'<[\w_]+>', quote(str(a)), uri, 1)
+        return cls.BASE + uri
 
-class FreesoundClient():
 
+class FreesoundClient:
     client_secret = ""
     client_id = ""
     token = ""
-    header =""
-    
+    header = ""
+
     def get_sound(self, sound_id):
-        uri = URIS.uri(URIS.SOUND,sound_id)        
+        uri = URIS.uri(URIS.SOUND, sound_id)
         return FSRequest.request(uri, {}, self, Sound)
 
     def text_search(self, **params):
@@ -87,102 +69,94 @@ class FreesoundClient():
     def content_based_search(self, **params):
         uri = URIS.uri(URIS.CONTENT_SEARCH)
         return FSRequest.request(uri, params, self, Pager)
-        
+
     def combined_search(self, **params):
         uri = URIS.uri(URIS.COMBINED_SEARCH)
-        return FSRequest.request(uri,params,self,CombinedSearchPager)
-    
-    def get_user(self,username):
-        uri = URIS.uri(URIS.USER, username)
-        return FSRequest.request(uri,{},self,User)
+        return FSRequest.request(uri, params, self, CombinedSearchPager)
 
-    def get_pack(self,pack_id):
+    def get_user(self, username):
+        uri = URIS.uri(URIS.USER, username)
+        return FSRequest.request(uri, {}, self, User)
+
+    def get_pack(self, pack_id):
         uri = URIS.uri(URIS.PACK, pack_id)
-        return FSRequest.request(uri,{},self,Pack)
-    
-    
-    
+        return FSRequest.request(uri, {}, self, Pack)
+
     def set_token(self, token, auth_type="token"):
-        self.token = token#TODO        
-        self.header = 'Bearer '+token if auth_type=='oauth' else 'Token '+token    
-        
+        self.token = token
+        self.header = 'Bearer ' + token if auth_type == 'oauth' else 'Token ' + token
+
 
 class FreesoundObject:
-    def __init__(self,json_dict, client):
-        self.client=client
+    def __init__(self, json_dict, client):
+        self.client = client
+
         def replace_dashes(d):
-            for k, v in d.items():
+            for k, v in list(d.items()):
                 if "-" in k:
-                    d[k.replace("-","_")] = d[k]
+                    d[k.replace("-", "_")] = d[k]
                     del d[k]
-                if isinstance(v, dict):replace_dashes(v)
-        
+                if isinstance(v, dict):
+                    replace_dashes(v)
+
         replace_dashes(json_dict)
         self.__dict__.update(json_dict)
         for k, v in json_dict.items():
             if isinstance(v, dict):
                 self.__dict__[k] = FreesoundObject(v, client)
 
+
 class FreesoundException(Exception):
-    def __init__(self, http_code, detail):        
+    def __init__(self, http_code, detail):
         self.code = http_code
         self.detail = detail
+
     def __str__(self):
-        return '<FreesoundException: code=%s, detail="%s">' % \
-                (self.code,  self.detail)
-        
-class Retriever(FancyURLopener):
-    def http_error_default(self, url, fp, errcode, errmsg, headers):
-        resp = fp.read()
-        try:
-            error = json.loads(resp)
-            raise FreesoundException(errcode,resp.detail)
-        except:
-            raise Exception(resp)
-            
+        return f'<FreesoundException: code={self.code}, detail="{self.detail}">'
+
+
 class FSRequest:
     @classmethod
-    def request(cls, uri, params={}, client=None, wrapper=FreesoundObject, method='GET',data=False):
+    def request(cls, uri, params=None, client=None, wrapper=FreesoundObject, method='GET', data=None):
         p = params if params else {}
-        url = '%s?%s' % (uri, urlencode(p)) if params else uri
-        d = urllib.urlencode(data) if data else None
-        headers = {'Authorization':client.header}  
-        req = Request(url,d,headers)
+        url = f'{uri}?{urlencode(p)}' if params else uri
+        d = urlencode(data).encode('utf-8') if data else None
+        headers = {'Authorization': client.header}
+        req = Request(url, data=d, headers=headers)
         try:
-            f = urlopen(req)
-        except HTTPError, e:
-            resp = e.read()
-            if e.code >= 200 and e.code < 300:
+            with urlopen(req) as f:
+                resp = f.read().decode('utf-8')
+        except HTTPError as e:
+            resp = e.read().decode('utf-8')
+            if 200 <= e.code < 300:
                 return resp
             else:
-                raise FreesoundException(e.code,json.loads(resp))
-        resp = f.read()
-        f.close()
-        result = None
-        try:
-            result = json.loads(resp)
-        except:
-            raise FreesoundException(0,"Couldn't parse response")
+                raise FreesoundException(e.code, json.loads(resp))
+        result = json.loads(resp)
         if wrapper:
-            return wrapper(result,client)
+            return wrapper(result, client)
         return result
 
     @classmethod
-    def retrieve(cls, url, client,path):
-        print '  from ' + url,
-        r = Retriever()
-        r.addheader('Authorization', client.header)        
-        return r.retrieve(url, path)
+    def retrieve(cls, url, client, path):
+        print(f'  from {url}', end='')
+        req = Request(url, headers={'Authorization': client.header})
+        with urlopen(req) as response, open(path, 'wb') as out_file:
+            out_file.write(response.read())
+        print()
+        return path
+
 
 class Pager(FreesoundObject):
     def __getitem__(self, key):
-        return Sound(self.results[key],self.client)
+        return Sound(self.results[key], self.client)
 
     def next_page(self):
         return FSRequest.request(self.next, {}, self.client, Pager)
 
     def previous_page(self):
         return FSRequest.request(self.previous, {}, self.client, Pager)
+
 
 class CombinedSearchPager(FreesoundObject):
     def __getitem__(self, key):
@@ -191,74 +165,71 @@ class CombinedSearchPager(FreesoundObject):
     def more(self):
         return FSRequest.request(self.more, {}, self.client, CombinedSearchPager)
 
+
 class Sound(FreesoundObject):
-        
     def retrieve(self, directory, soundid, name=False):
         path = os.path.join(directory, name if name else self.name)
         uri = URIS.uri(URIS.DOWNLOAD, soundid)
-        return FSRequest.retrieve(uri, self.client,path)
-    
-    def retrieve_preview_hq_ogg(self, directory, name=False):
-        path = os.path.join(directory, name if name else str(self.previews.preview_hq_ogg.split("/")[-1]))
-        return FSRequest.retrieve(self.previews.preview_hq_ogg, self.client,path)
+        return FSRequest.retrieve(uri, self.client, path)
 
-    def retrieve_preview_lq_ogg(self, directory, name=False):
-        path = os.path.join(directory, name if name else str(self.previews.preview_lq_ogg.split("/")[-1]))
-        return FSRequest.retrieve(self.previews.preview_lq_ogg, self.client,path)
+    def retrieve_preview_hq_ogg(self, directory, name=False):
+        path = os.path.join(directory, name if name else self.previews.preview_hq_ogg.split("/")[-1])
+        return FSRequest.retrieve(self.previews.preview_hq_ogg, self.client, path)
 
     def retrieve_preview_hq_mp3(self, directory, name=False):
-        path = os.path.join(directory, name if name else str(self.previews.preview_hq_mp3.split("/")[-1]))
-        return FSRequest.retrieve(self.previews.preview_hq_mp3, self.client,path)
+        path = os.path.join(directory, name if name else self.previews.preview_hq_mp3.split("/")[-1])
+        return FSRequest.retrieve(self.previews.preview_hq_mp3, self.client, path)
+
+    def retrieve_preview_lq_ogg(self, directory, name=False):
+        path = os.path.join(directory, name if name else self.previews.preview_lq_ogg.split("/")[-1])
+        return FSRequest.retrieve(self.previews.preview_lq_ogg, self.client, path)
 
     def retrieve_preview_lq_mp3(self, directory, name=False):
-        path = os.path.join(directory, name if name else str(self.previews.preview_lq_mp3.split("/")[-1]))
-        return FSRequest.retrieve(self.previews.preview_lq_mp3, self.client,path)
+        path = os.path.join(directory, name if name else self.previews.preview_lq_mp3.split("/")[-1])
+        return FSRequest.retrieve(self.previews.preview_lq_mp3, self.client, path)
 
     def get_analysis(self, descriptors=None):
-        uri = URIS.uri(URIS.SOUND_ANALYSIS,self.id)
-        params = {}
-        if descriptors:
-            params['descriptors']=descriptors
-        return FSRequest.request(uri, params,self.client,FreesoundObject)
+        uri = URIS.uri(URIS.SOUND_ANALYSIS, self.id)
+        params = {'descriptors': descriptors} if descriptors else {}
+        return FSRequest.request(uri, params, self.client, FreesoundObject)
 
     def get_similar(self):
-        uri = URIS.uri(URIS.SIMILAR_SOUNDS,self.id)
-        return FSRequest.request(uri, {},self.client, Pager)
+        uri = URIS.uri(URIS.SIMILAR_SOUNDS, self.id)
+        return FSRequest.request(uri, {}, self.client, Pager)
 
     def get_comments(self):
-        uri = URIS.uri(URIS.COMMENTS,self.id)
+        uri = URIS.uri(URIS.COMMENTS, self.id)
         return FSRequest.request(uri, {}, self.client, Pager)
 
     def __repr__(self):
-        return '<Sound: id="%s", name="%s">' % \
-                (self.id, self.name)
+        return f'<Sound: id="{self.id}", name="{self.name}">'
+
 
 class User(FreesoundObject):
-
     def get_sounds(self):
-        uri = URIS.uri(URIS.USER_SOUNDS,self.username)
-        return FSRequest.request(uri, {}, self.client, Pager)    
-    
+        uri = URIS.uri(URIS.USER_SOUNDS, self.username)
+        return FSRequest.request(uri, {}, self.client, Pager)
+
     def get_packs(self):
-        uri = URIS.uri(URIS.USER_PACKS,self.username)
-        return FSRequest.request(uri, {}, self.client, Pager)    
+        uri = URIS.uri(URIS.USER_PACKS, self.username)
+        return FSRequest.request(uri, {}, self.client, Pager)
 
-    def get_bookmark_categories(self):
-        uri = URIS.uri(URIS.USER_BOOKMARK_CATEGORIES,self.username)
-        return FSRequest.request(uri, {}, self.client, Pager)    
+    def __repr__(self):
+        return f'<User: username="{self.username}">'
 
-    def get_bookmark_category_sounds(self): 
-        uri = URIS.uri(URIS.USER_BOOKMARK_CATEGORY_SOUNDS,self.username)
-        return FSRequest.request(uri, {}, self.client, Pager)    
-
-    def __repr__(self): return '<User: "%s">' % ( self.username)
 
 class Pack(FreesoundObject):
-
     def get_sounds(self):
-        uri = URIS.uri(URIS.PACK_SOUNDS,self.id)
+        uri = URIS.uri(URIS.PACK_SOUNDS, self.id)
         return FSRequest.request(uri, {}, self.client, Pager)
-    
+
     def __repr__(self):
-        return '<Pack:  name="%s">' % \
-                ( self.get('name','n.a.'))
+        return f'<Pack: name="{self.get("name", "n.a.")}">'
+
+
+if __name__ == "__main__":
+    # 示例用法
+    client = FreesoundClient()
+    client.set_token("your_api_token_here", "token")
+    sound = client.get_sound(12345)
+    print(sound)
